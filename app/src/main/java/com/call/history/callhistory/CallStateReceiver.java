@@ -6,8 +6,6 @@ import android.content.Intent;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
-import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,8 +30,8 @@ public class CallStateReceiver extends BroadcastReceiver {
 
         List<RowEntry> data = new ArrayList<>();
         RowEntry a = new RowEntry();
-        a.setColumn1("gokul");
-        a.setColumn2("ramanan");
+        a.setNumber("gokul");
+        a.setTime("ramanan");
         data.add(a);
     }
 }

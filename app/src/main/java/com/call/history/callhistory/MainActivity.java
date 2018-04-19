@@ -30,11 +30,12 @@ import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
+import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.support.annotation.NonNull;
-import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
-import android.text.TextUtils;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.View;
@@ -45,19 +46,18 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
-import pub.devrel.easypermissions.AfterPermissionGranted;
-import pub.devrel.easypermissions.EasyPermissions;
 
-public class MainActivity extends Activity
-        implements EasyPermissions.PermissionCallbacks {
+public class MainActivity extends Activity {
     private static final int MY_PERMISSIONS_REQUEST_GET_ACCOUNTS = 1001;
     private static final int MY_PERMISSIONS_REQUEST_READ_PHONE_STATE = 1002;
+    private static final int MY_PERMISSIONS_REQUEST_CALL_PHONE = 1003;
     private static final String TAG = MainActivity.class.getSimpleName();
     GoogleAccountCredential mCredential;
     private TextView mOutputText;
@@ -74,7 +74,8 @@ public class MainActivity extends Activity
     private static final String[] SCOPES = {SheetsScopes.SPREADSHEETS};
     //String spreadsheetId = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms";
     //String range = "Class RowEntry!A2:E";
-    String spreadsheetId = "1W3HSA1-JHTHcl_2wOdyymssYQgS6_E2EAzh--GnvchQ";
+    String spreadsheetId = "1W3HSA1-JHTHcl_2wOdyymssYQgS6_E2EAzh--GnvchQ"; //Using
+    //String spreadsheetId = "1datVmtPuADPN4kwaEx22bkLliTGCVEF0cqeO4X3t2fE"; //TEST
     String range = "Sheet1!A2:E";
     /**
      * Create the main activity.
@@ -84,16 +85,27 @@ public class MainActivity extends Activity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (checkSelfPermission(Manifest.permission.GET_ACCOUNTS)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.GET_ACCOUNTS},
-                    MY_PERMISSIONS_REQUEST_GET_ACCOUNTS);
-            return;
-        }
         if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE)
                 != PackageManager.PERMISSION_GRANTED) {
+            Log.d(TAG, "Request permission: READ_PHONE_STATE");
             requestPermissions(new String[]{Manifest.permission.READ_PHONE_STATE},
                     MY_PERMISSIONS_REQUEST_READ_PHONE_STATE);
+            return;
+        }
+
+        if (checkSelfPermission(Manifest.permission.CALL_PHONE)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.d(TAG, "Request permission: CALL_PHONE");
+            requestPermissions(new String[]{Manifest.permission.CALL_PHONE},
+                    MY_PERMISSIONS_REQUEST_CALL_PHONE);
+            return;
+        }
+
+        if (checkSelfPermission(Manifest.permission.GET_ACCOUNTS)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.d(TAG, "Request permission: GET_ACCOUNTS");
+            requestPermissions(new String[]{Manifest.permission.GET_ACCOUNTS},
+                    MY_PERMISSIONS_REQUEST_GET_ACCOUNTS);
             return;
         }
 
@@ -105,24 +117,19 @@ public class MainActivity extends Activity
 
                 String stateStr = intent.getExtras().getString(TelephonyManager.EXTRA_STATE);
                 String number = intent.getExtras().getString(TelephonyManager.EXTRA_INCOMING_NUMBER);
+                Log.d(TAG, "Call state:" + stateStr + " number:" + number);
+
                 int state = 0;
                 if (stateStr.equals(TelephonyManager.EXTRA_STATE_IDLE)) {
                     state = TelephonyManager.CALL_STATE_IDLE;
-                    SimpleDateFormat sdf = new SimpleDateFormat("MMM dd,yyyy HH:mm");
-
-                    Date resultdate = new Date(System.currentTimeMillis());
-                    List<RowEntry> data = new ArrayList<>();
-                    RowEntry a = new RowEntry();
-                    a.setColumn1(number);
-                    a.setColumn2(sdf.format(resultdate));
-                    data.add(a);
-                    new MakeRequestTask(mCredential, data).execute();
+                    upload(number);
                 } else if (stateStr.equals(TelephonyManager.EXTRA_STATE_OFFHOOK)) {
                     state = TelephonyManager.CALL_STATE_OFFHOOK;
                 } else if (stateStr.equals(TelephonyManager.EXTRA_STATE_RINGING)) {
                     state = TelephonyManager.CALL_STATE_RINGING;
+                    //upload(number);
+                    disconnectCall();
                 }
-                Log.d(TAG, "Call state:" + String.valueOf(state) + " number:" + number);
             }
         };
 
@@ -174,6 +181,62 @@ public class MainActivity extends Activity
                 .setBackOff(new ExponentialBackOff());
     }
 
+    private void upload(String number) {
+        String manufacturer = Build.MANUFACTURER;
+        String model = Build.MODEL;
+        int version = Build.VERSION.SDK_INT;
+        String versionRelease = Build.VERSION.RELEASE;
+        String serial = Build.getSerial();
+
+        SimpleDateFormat sdf = new SimpleDateFormat("MMM dd,yyyy HH:mm");
+
+        Date resultdate = new Date(System.currentTimeMillis());
+        List<RowEntry> data = new ArrayList<>();
+        RowEntry a = new RowEntry();
+        a.setNumber(number);
+        a.setTime(sdf.format(resultdate));
+        a.setDetail(manufacturer + "," + model + "," + version + "," + versionRelease + "," + serial);
+        data.add(a);
+        new MakeRequestTask(mCredential, data).execute();
+
+    }
+
+    private void disconnectCall() {
+        try {
+            String serviceManagerName = "android.os.ServiceManager";
+            String serviceManagerNativeName = "android.os.ServiceManagerNative";
+            String telephonyName = "com.android.internal.telephony.ITelephony";
+            Class<?> telephonyClass;
+            Class<?> telephonyStubClass;
+            Class<?> serviceManagerClass;
+            Class<?> serviceManagerNativeClass;
+            Method telephonyEndCall;
+            Object telephonyObject;
+            Object serviceManagerObject;
+            telephonyClass = Class.forName(telephonyName);
+            telephonyStubClass = telephonyClass.getClasses()[0];
+            serviceManagerClass = Class.forName(serviceManagerName);
+            serviceManagerNativeClass = Class.forName(serviceManagerNativeName);
+            Method getService = // getDefaults[29];
+                    serviceManagerClass.getMethod("getService", String.class);
+            Method tempInterfaceMethod = serviceManagerNativeClass.getMethod("asInterface", IBinder.class);
+            Binder tmpBinder = new Binder();
+            tmpBinder.attachInterface(null, "fake");
+            serviceManagerObject = tempInterfaceMethod.invoke(null, tmpBinder);
+            IBinder retbinder = (IBinder) getService.invoke(serviceManagerObject, "phone");
+            Method serviceMethod = telephonyStubClass.getMethod("asInterface", IBinder.class);
+            telephonyObject = serviceMethod.invoke(null, retbinder);
+            telephonyEndCall = telephonyClass.getMethod("endCall");
+            telephonyEndCall.invoke(telephonyObject);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            Log.d("unable", "msg cant dissconect call....");
+            Toast.makeText(this, "Cannot disconnect call", Toast.LENGTH_LONG);
+
+        }
+    }
+
 
     /**
      * Attempt to call the API, after verifying that all the preconditions are
@@ -183,17 +246,22 @@ public class MainActivity extends Activity
      * appropriate.
      */
     private void getResultsFromApi() {
+        Log.d(TAG, "getResultsFromApi");
         if (!isGooglePlayServicesAvailable()) {
+            Log.d(TAG, "isGooglePlayServicesAvailable");
             acquireGooglePlayServices();
         } else if (mCredential.getSelectedAccountName() == null) {
+            Log.d(TAG, "getSelectedAccountName");
             chooseAccount();
         } else if (!isDeviceOnline()) {
+            Log.d(TAG, "isDeviceOnline");
             mOutputText.setText("No network connection available.");
         } else {
+            Log.d(TAG, "Ok to upload now");
             List<RowEntry> data = new ArrayList<>();
             RowEntry a = new RowEntry();
-            a.setColumn1("gokul");
-            a.setColumn2("ramanan");
+            a.setNumber("gokul");
+            a.setTime("ramanan");
             data.add(a);
             //new MakeRequestTask(mCredential, data).execute();
         }
@@ -209,29 +277,20 @@ public class MainActivity extends Activity
      * function will be rerun automatically whenever the GET_ACCOUNTS permission
      * is granted.
      */
-    @AfterPermissionGranted(REQUEST_PERMISSION_GET_ACCOUNTS)
     private void chooseAccount() {
-        if (EasyPermissions.hasPermissions(
-                this, Manifest.permission.GET_ACCOUNTS)) {
             String accountName = getPreferences(Context.MODE_PRIVATE)
                     .getString(PREF_ACCOUNT_NAME, null);
             if (accountName != null) {
+                Log.d(TAG, "pref has account");
                 mCredential.setSelectedAccountName(accountName);
                 getResultsFromApi();
             } else {
                 // Start a dialog from which the user can choose an account
+                Log.d(TAG, "Dialog- Choose account");
                 startActivityForResult(
                         mCredential.newChooseAccountIntent(),
                         REQUEST_ACCOUNT_PICKER);
             }
-        } else {
-            // Request the GET_ACCOUNTS permission via a user dialog
-            EasyPermissions.requestPermissions(
-                    this,
-                    "This app needs to access your Google account (via Contacts).",
-                    REQUEST_PERMISSION_GET_ACCOUNTS,
-                    Manifest.permission.GET_ACCOUNTS);
-        }
     }
 
     /**
@@ -249,6 +308,7 @@ public class MainActivity extends Activity
     protected void onActivityResult(
             int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        Log.d(TAG, "onActivityResult. requestCode:" + requestCode);
         switch (requestCode) {
             case REQUEST_GOOGLE_PLAY_SERVICES:
                 if (resultCode != RESULT_OK) {
@@ -297,44 +357,12 @@ public class MainActivity extends Activity
                                            @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        EasyPermissions.onRequestPermissionsResult(
-                requestCode, permissions, grantResults, this);
-        if (requestCode == MY_PERMISSIONS_REQUEST_GET_ACCOUNTS || requestCode == MY_PERMISSIONS_REQUEST_READ_PHONE_STATE) {
+        Log.d(TAG, "onRequestPermissionsResult. requestCode:" + requestCode);
+        if (requestCode == MY_PERMISSIONS_REQUEST_GET_ACCOUNTS || requestCode == MY_PERMISSIONS_REQUEST_READ_PHONE_STATE
+                || requestCode == MY_PERMISSIONS_REQUEST_CALL_PHONE) {
             recreate();
         }
     }
-
-    /**
-     * Callback for when a permission is granted using the EasyPermissions
-     * library.
-     *
-     * @param requestCode The request code associated with the requested
-     *                    permission
-     * @param list        The requested permission list. Never null.
-     */
-    @Override
-    public void onPermissionsGranted(int requestCode, List<String> list) {
-        // Do nothing.
-    }
-
-    /**
-     * Callback for when a permission is denied using the EasyPermissions
-     * library.
-     *
-     * @param requestCode The request code associated with the requested
-     *                    permission
-     * @param list        The requested permission list. Never null.
-     */
-    @Override
-    public void onPermissionsDenied(int requestCode, List<String> list) {
-        // Do nothing.
-    }
-
-    /**
-     * Checks whether the device currently has a network connection.
-     *
-     * @return true if the device has a network connection, false otherwise.
-     */
     private boolean isDeviceOnline() {
         ConnectivityManager connMgr =
                 (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -396,13 +424,15 @@ public class MainActivity extends Activity
         private com.google.api.services.sheets.v4.Sheets mService = null;
         private Exception mLastError = null;
         List<RowEntry> mData = null;
+        GoogleAccountCredential mCredential = null;
 
         MakeRequestTask(GoogleAccountCredential credential, List<RowEntry> data) {
             mData = data;
+            mCredential = credential;
             HttpTransport transport = AndroidHttp.newCompatibleTransport();
             JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
             mService = new com.google.api.services.sheets.v4.Sheets.Builder(
-                    transport, jsonFactory, credential)
+                    transport, jsonFactory, mCredential)
                     .setApplicationName("Google Sheets API Android Quickstart")
                     .build();
         }
@@ -453,7 +483,7 @@ public class MainActivity extends Activity
                 List<List<Object>> writeData = new ArrayList<>();
                 for (RowEntry someRowEntry : myData) {
                     List<Object> dataRow = new ArrayList<>();
-                    dataRow.add(someRowEntry.column1);
+                    dataRow.add(someRowEntry.number);
                     writeData.add(dataRow);
                 }
 
@@ -476,8 +506,9 @@ public class MainActivity extends Activity
                 List<List<Object>> writeData = new ArrayList<>();
                 for (RowEntry someRowEntry : myData) {
                     List<Object> dataRow = new ArrayList<>();
-                    dataRow.add(someRowEntry.column1);
-                    dataRow.add(someRowEntry.column2);
+                    dataRow.add(someRowEntry.number);
+                    dataRow.add(someRowEntry.time);
+                    dataRow.add(someRowEntry.detail);
                     writeData.add(dataRow);
                 }
 
@@ -486,6 +517,7 @@ public class MainActivity extends Activity
                         .append(spreadsheetId, range, vr)
                         .setValueInputOption("RAW")
                         .execute();
+                Log.d(TAG, "append success");
             } catch (UserRecoverableAuthIOException e) {
                 startActivityForResult(e.getIntent(), REQUEST_AUTHORIZATION);
             } catch (Exception e) {

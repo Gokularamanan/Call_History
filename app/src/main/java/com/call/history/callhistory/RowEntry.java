@@ -1,23 +1,32 @@
 package com.call.history.callhistory;
 
 class RowEntry {
-    public String column1;
-    public String column2;
+    public String number;
+    public String time;
+    public String detail;
 
-    public String getColumn1() {
-        return column1;
+    public String getNumber() {
+        return number;
     }
 
-    public void setColumn1(String column1) {
-        this.column1 = column1;
+    public void setNumber(String number) {
+        this.number = number;
+    }
+
+    public String getTime() {
+        return time;
+    }
+
+    public void setTime(String time) {
+        this.time = time;
     }
 
 
-    public String getColumn2() {
-        return column2;
+    public String getDetail() {
+        return detail;
     }
 
-    public void setColumn2(String column2) {
-        this.column2 = column2;
+    public void setDetail(String detail) {
+        this.detail = detail;
     }
 }
