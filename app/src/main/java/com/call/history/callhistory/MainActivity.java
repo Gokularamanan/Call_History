@@ -127,7 +127,6 @@ public class MainActivity extends Activity {
                     state = TelephonyManager.CALL_STATE_OFFHOOK;
                 } else if (stateStr.equals(TelephonyManager.EXTRA_STATE_RINGING)) {
                     state = TelephonyManager.CALL_STATE_RINGING;
-                    //upload(number);
                     disconnectCall();
                 }
             }
@@ -186,7 +185,7 @@ public class MainActivity extends Activity {
         String model = Build.MODEL;
         int version = Build.VERSION.SDK_INT;
         String versionRelease = Build.VERSION.RELEASE;
-        String serial = Build.getSerial();
+        //String serial = Build.getSerial();
 
         SimpleDateFormat sdf = new SimpleDateFormat("MMM dd,yyyy HH:mm");
 
@@ -195,7 +194,7 @@ public class MainActivity extends Activity {
         RowEntry a = new RowEntry();
         a.setNumber(number);
         a.setTime(sdf.format(resultdate));
-        a.setDetail(manufacturer + "," + model + "," + version + "," + versionRelease + "," + serial);
+        a.setDetail(manufacturer + "," + model + "," + version + "," + versionRelease/* + "," + serial*/);
         data.add(a);
         new MakeRequestTask(mCredential, data).execute();
 
