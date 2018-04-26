@@ -21,7 +21,6 @@ class RowEntry {
         this.time = time;
     }
 
-
     public String getDetail() {
         return detail;
     }
