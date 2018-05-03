@@ -9,6 +9,8 @@ public class MyApplication extends Application implements Application.ActivityLi
     private static final String TAG = Utils.TAG_APP + MyApplication.class.getSimpleName();
 
     private static boolean canActivityAct;
+    public static String rejectNumber;
+    public static String statusText = "XL Connection:Fail,Must click";
 
     @Override
     public void onActivityCreated(Activity activity, Bundle savedInstanceState) {

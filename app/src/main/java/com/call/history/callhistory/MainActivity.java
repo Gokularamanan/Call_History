@@ -16,12 +16,14 @@ import com.google.api.client.util.ExponentialBackOff;
 import com.google.api.services.sheets.v4.SheetsScopes;
 
 import com.google.api.services.sheets.v4.model.*;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 
 import android.Manifest;
 import android.accounts.AccountManager;
 import android.app.Activity;
 import android.app.Dialog;
-import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -31,28 +33,27 @@ import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
-import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.telephony.TelephonyManager;
-import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.util.Pair;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -65,21 +66,23 @@ public class MainActivity extends Activity {
     private static final String TAG = Utils.TAG_APP + MainActivity.class.getSimpleName();
     GoogleAccountCredential mCredential;
     private Button mCallApiButton;
+    private LinearLayout mRoleLayout, mWriteLayout;
 
     static final int REQUEST_ACCOUNT_PICKER = 1000;
     static final int REQUEST_AUTHORIZATION = 1001;
     static final int REQUEST_GOOGLE_PLAY_SERVICES = 1002;
     static final int REQUEST_PERMISSION_GET_ACCOUNTS = 1003;
 
-    private static final String BUTTON_TEXT = "XL Connection:";
     private static final String PREF_ACCOUNT_NAME = "accountName";
     private static final String[] SCOPES = {SheetsScopes.SPREADSHEETS};
 
     //String spreadsheetId = "1W3HSA1-JHTHcl_2wOdyymssYQgS6_E2EAzh--GnvchQ"; //Using
-    String spreadsheetId = "1datVmtPuADPN4kwaEx22bkLliTGCVEF0cqeO4X3t2fE"; //TEST
+    String spreadsheetId;// = "1datVmtPuADPN4kwaEx22bkLliTGCVEF0cqeO4X3t2fE"; //TEST
     String range = "Sheet1!A2:E";
     Thread thread;
     boolean isVisible;
+    private int role;
+    private boolean isRegister;
 
     /**
      * Create the main activity.
@@ -116,55 +119,83 @@ public class MainActivity extends Activity {
             return;
         }
 
-        IntentFilter rejectCall = new IntentFilter();
-        rejectCall.addAction(TelephonyManager.ACTION_PHONE_STATE_CHANGED);
-        registerReceiver(rejectCallReceiver, rejectCall);
+        setContentView(R.layout.activity_main);
+        mRoleLayout = (LinearLayout) findViewById(R.id.device_role);
+        mWriteLayout = (LinearLayout) findViewById(R.id.writeLayout);
 
-        LinearLayout activityLayout = new LinearLayout(this);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.MATCH_PARENT);
-        activityLayout.setLayoutParams(lp);
-        activityLayout.setOrientation(LinearLayout.VERTICAL);
-        activityLayout.setPadding(16, 300, 16, 16);
-
-        ViewGroup.LayoutParams tlp = new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-
-        mCallApiButton = new Button(this);
-        mCallApiButton.setText(BUTTON_TEXT + "...");
-        mCallApiButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mCallApiButton.setEnabled(false);
-                getResultsFromApi();
-                mCallApiButton.setEnabled(true);
-            }
-        });
-        activityLayout.addView(mCallApiButton);
-        thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                DataHelper helper = new DataHelper(getApplicationContext());
-                int count = helper.getPendingNumber().size();
-                if (isVisible) {
-                    if (count >0) {
-                        mCallApiButton.setText(BUTTON_TEXT + "Fail. Must click here");
-                    } else {
-                        mCallApiButton.setText(BUTTON_TEXT + "Success");
-                    }
+        role = Utils.getRole(this);
+        if (role == Utils.DEVICE_ROLE_UNKNOWN) {
+            mRoleLayout.setVisibility(View.VISIBLE);
+            mWriteLayout.setVisibility(View.GONE);
+            Button setReceive = (Button) findViewById(R.id.btn_receive);
+            Button setMake = (Button) findViewById(R.id.btn_make);
+            setReceive.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Utils.setRole(getApplicationContext(), Utils.DEVICE_ROLE_RECEIVE);
+                    recreate();
                 }
+            });
+            setMake.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Utils.setRole(getApplicationContext(), Utils.DEVICE_ROLE_MAKE);
+                    recreate();
+                }
+            });
+
+        } else if (role == Utils.DEVICE_ROLE_RECEIVE) {
+            mRoleLayout.setVisibility(View.GONE);
+            mWriteLayout.setVisibility(View.VISIBLE);
+            spreadsheetId = Utils.getPrefXlId(this);
+            RelativeLayout getIdLayout = (RelativeLayout)findViewById(R.id.get_xls_layout);
+            RelativeLayout statusLayout = (RelativeLayout)findViewById(R.id.status_layout);
+            mCallApiButton = (Button) findViewById(R.id.status_button);
+            if (spreadsheetId == null || spreadsheetId.isEmpty()) {
+                getIdLayout.setVisibility(View.VISIBLE);
+                statusLayout.setVisibility(View.GONE);
+                mCallApiButton.setVisibility(View.GONE);
+                Button btnenter = (Button)findViewById(R.id.btnenter);
+                final TextView editText = (TextView)findViewById(R.id.editText);
+                btnenter.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        spreadsheetId = editText.getText().toString();
+                        if (!spreadsheetId.isEmpty()) {
+                            Utils.setPrefXlId(getApplicationContext(), spreadsheetId);
+                            recreate();
+                        }else {
+                            Toast.makeText(getApplicationContext(), "Enter XL id", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+            }else {
+                getIdLayout.setVisibility(View.GONE);
+                statusLayout.setVisibility(View.VISIBLE);
+                mCallApiButton.setVisibility(View.VISIBLE);
+                mCallApiButton.setText(Utils.getStatusText());
+                mCallApiButton.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        mCallApiButton.setEnabled(false);
+                        getResultsFromApi();
+                        mCallApiButton.setEnabled(true);
+                    }
+                });
+                IntentFilter rejectCall = new IntentFilter();
+                rejectCall.addAction(TelephonyManager.ACTION_PHONE_STATE_CHANGED);
+                registerReceiver(rejectCallReceiver, rejectCall);
+                isRegister =true;
+
+                // Initialize credentials and service object.
+                mCredential = GoogleAccountCredential.usingOAuth2(
+                        getApplicationContext(), Arrays.asList(SCOPES))
+                        .setBackOff(new ExponentialBackOff());
             }
-        });
-        thread.start();
-
-        setContentView(activityLayout);
-
-        // Initialize credentials and service object.
-        mCredential = GoogleAccountCredential.usingOAuth2(
-                getApplicationContext(), Arrays.asList(SCOPES))
-                .setBackOff(new ExponentialBackOff());
+        } else if (role == Utils.DEVICE_ROLE_MAKE) {
+            Utils.launchActivity(this, new Intent(this, Main2Activity.class));
+            finish();
+        }
     }
 
     BroadcastReceiver rejectCallReceiver = new BroadcastReceiver() {
@@ -180,11 +211,18 @@ public class MainActivity extends Activity {
             int state = 0;
             if (stateStr.equals(TelephonyManager.EXTRA_STATE_IDLE)) {
                 state = TelephonyManager.CALL_STATE_IDLE;
-                upload(context, number);
+                String numFromPref = Utils.getPrefRejectNumber(context);
+                Utils.setPrefRejectNumber(context, null);
+                if (numFromPref != null) {
+                    upload(context, numFromPref);
+                } else {
+                    Log.e(TAG, "Should be outgoing call disconnect");
+                }
             } else if (stateStr.equals(TelephonyManager.EXTRA_STATE_OFFHOOK)) {
                 state = TelephonyManager.CALL_STATE_OFFHOOK;
             } else if (stateStr.equals(TelephonyManager.EXTRA_STATE_RINGING)) {
                 state = TelephonyManager.CALL_STATE_RINGING;
+                Utils.setPrefRejectNumber(context, number);
                 Utils.disconnectCall(context);
             }
         }
@@ -222,7 +260,9 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         nMyApplication.onActivityDestroyed(this);
-        unregisterReceiver(rejectCallReceiver);
+        if (isRegister) {
+            unregisterReceiver(rejectCallReceiver);
+        }
         isVisible = false;
     }
 
@@ -269,7 +309,8 @@ public class MainActivity extends Activity {
             chooseAccount();
         } else if (!isDeviceOnline()) {
             Log.d(TAG, "isDeviceOnline");
-            mCallApiButton.setText("No network connection available.");
+            Utils.setStatusText("No network connection available.");
+            mCallApiButton.setText(Utils.getStatusText());
         } else {
             Log.d(TAG, "Ok to upload now");
             //TODO: Check pending data from DB and upload
@@ -322,9 +363,9 @@ public class MainActivity extends Activity {
         switch (requestCode) {
             case REQUEST_GOOGLE_PLAY_SERVICES:
                 if (resultCode != RESULT_OK) {
-                    mCallApiButton.setText(
-                            "This app requires Google Play Services. Please install " +
-                                    "Google Play Services on your device and relaunch this app.");
+                    Utils.setStatusText("This app requires Google Play Services. Please install " +
+                            "Google Play Services on your device and relaunch this app.");
+                    mCallApiButton.setText(Utils.getStatusText());
                 } else {
                     getResultsFromApi();
                 }
@@ -489,13 +530,15 @@ public class MainActivity extends Activity {
                         .setValueInputOption("RAW")
                         .execute();
                 Log.d(TAG, "append success:" + rowSize);
+                saveInFireBase(myData);
                 MyApplication.setCanActivityAct(true);
                 DataHelper helper = new DataHelper(mContext);
                 if (helper.getPendingNumber().size() > 0) {
                     helper.deleteDBEntry();
                 }
                 if (isVisible) {
-                    mCallApiButton.setText(BUTTON_TEXT + "Success");
+                    Utils.setStatusText("XL Connection:Success");
+                    mCallApiButton.setText(Utils.getStatusText());
                 }
             } catch (UserRecoverableAuthIOException e) {
                 MyApplication.setCanActivityAct(false);
@@ -531,11 +574,13 @@ public class MainActivity extends Activity {
                             ((UserRecoverableAuthIOException) mLastError).getIntent(),
                             MainActivity.REQUEST_AUTHORIZATION);
                 } else {
-                    mCallApiButton.setText("The following error occurred:\n"
+                    Utils.setStatusText("The following error occurred:\n"
                             + mLastError.getMessage());
+                    mCallApiButton.setText(Utils.getStatusText());
                 }
             } else {
-                mCallApiButton.setText("Request cancelled.");
+                Utils.setStatusText("Request cancelled.");
+                mCallApiButton.setText(Utils.getStatusText());
             }
         }
 
@@ -583,6 +628,32 @@ public class MainActivity extends Activity {
                 e.printStackTrace();
             }
             return null;
+        }
+    }
+
+    private void saveInFireBase(List<RowEntry> myData) {
+        for (RowEntry someRowEntry : myData) {
+            //save it to the firebase db
+            FirebaseDatabase database = FirebaseDatabase.getInstance();
+            String key = database.getReference("callhistory-783df").push().getKey();
+
+            Entry entry = new Entry();
+            entry.setNumber(someRowEntry.number);
+            entry.setTime(someRowEntry.time);
+            entry.setDetail(someRowEntry.detail);
+
+            Map<String, Object> childUpdates = new HashMap<>();
+            childUpdates.put( key, entry.toFirebaseObject());
+            database.getReference("callhistory-783df").updateChildren(childUpdates, new DatabaseReference.CompletionListener() {
+                @Override
+                public void onComplete(DatabaseError databaseError, DatabaseReference databaseReference) {
+                    if (databaseError == null) {
+                        //finish();
+                    }else {
+                        Log.e(TAG, "databaseError" + databaseError.toString());
+                    }
+                }
+            });
         }
     }
 

@@ -63,6 +63,7 @@ public class DataHelper extends SQLiteOpenHelper {
         long result = db.insert(TABLE_NAME,null,contentValues);
         db.close();
         Log.d(TAG, "Write number: " + number + "-" + result);
+        Utils.setStatusText("XL Connection:Pending,Must click");
     }
 
     public void deleteDBEntry() {
