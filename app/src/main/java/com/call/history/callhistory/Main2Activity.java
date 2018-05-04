@@ -77,7 +77,7 @@ public class Main2Activity extends Activity {
     protected void onResume() {
         super.onResume();
         FirebaseDatabase database = FirebaseDatabase.getInstance();
-        database.getReference("callhistory-783df").addListenerForSingleValueEvent(
+        database.getReference(Utils.FB_REF_URL).addListenerForSingleValueEvent(
                 new ValueEventListener() {
                     @Override
                     public void onDataChange(DataSnapshot dataSnapshot) {

@@ -37,13 +37,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.telephony.TelephonyManager;
-import android.util.Log;
 import android.util.Pair;
-import android.view.Menu;
-import android.view.MenuInflater;
-import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
@@ -63,6 +58,7 @@ public class MainActivity extends Activity {
     private static final int MY_PERMISSIONS_REQUEST_GET_ACCOUNTS = 1001;
     private static final int MY_PERMISSIONS_REQUEST_READ_PHONE_STATE = 1002;
     private static final int MY_PERMISSIONS_REQUEST_CALL_PHONE = 1003;
+    private static final int MY_PERMISSIONS_REQUEST_STORAGE = 1004;
     private static final String TAG = Utils.TAG_APP + MainActivity.class.getSimpleName();
     GoogleAccountCredential mCredential;
     private Button mCallApiButton;
@@ -71,15 +67,14 @@ public class MainActivity extends Activity {
     static final int REQUEST_ACCOUNT_PICKER = 1000;
     static final int REQUEST_AUTHORIZATION = 1001;
     static final int REQUEST_GOOGLE_PLAY_SERVICES = 1002;
-    static final int REQUEST_PERMISSION_GET_ACCOUNTS = 1003;
 
     private static final String PREF_ACCOUNT_NAME = "accountName";
     private static final String[] SCOPES = {SheetsScopes.SPREADSHEETS};
 
-    //String spreadsheetId = "1W3HSA1-JHTHcl_2wOdyymssYQgS6_E2EAzh--GnvchQ"; //Using
-    String spreadsheetId;// = "1datVmtPuADPN4kwaEx22bkLliTGCVEF0cqeO4X3t2fE"; //TEST
+    //"1W3HSA1-JHTHcl_2wOdyymssYQgS6_E2EAzh--GnvchQ" //Using
+    //"1datVmtPuADPN4kwaEx22bkLliTGCVEF0cqeO4X3t2fE" //TEST
+    String spreadsheetId;
     String range = "Sheet1!A2:E";
-    Thread thread;
     boolean isVisible;
     private int role;
     private boolean isRegister;
@@ -97,7 +92,7 @@ public class MainActivity extends Activity {
         isVisible = true;
         if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE)
                 != PackageManager.PERMISSION_GRANTED) {
-            Log.d(TAG, "Request permission: READ_PHONE_STATE");
+            Utils.appendLog(TAG, "Request permission: READ_PHONE_STATE");
             requestPermissions(new String[]{Manifest.permission.READ_PHONE_STATE},
                     MY_PERMISSIONS_REQUEST_READ_PHONE_STATE);
             return;
@@ -105,15 +100,23 @@ public class MainActivity extends Activity {
 
         if (checkSelfPermission(Manifest.permission.CALL_PHONE)
                 != PackageManager.PERMISSION_GRANTED) {
-            Log.d(TAG, "Request permission: CALL_PHONE");
+            Utils.appendLog(TAG, "Request permission: CALL_PHONE");
             requestPermissions(new String[]{Manifest.permission.CALL_PHONE},
                     MY_PERMISSIONS_REQUEST_CALL_PHONE);
             return;
         }
 
+        if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            Utils.appendLog(TAG, "Request permission: WRITE_EXTERNAL_STORAGE");
+            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    MY_PERMISSIONS_REQUEST_STORAGE);
+            return;
+        }
+
         if (checkSelfPermission(Manifest.permission.GET_ACCOUNTS)
                 != PackageManager.PERMISSION_GRANTED) {
-            Log.d(TAG, "Request permission: GET_ACCOUNTS");
+            Utils.appendLog(TAG, "Request permission: GET_ACCOUNTS");
             requestPermissions(new String[]{Manifest.permission.GET_ACCOUNTS},
                     MY_PERMISSIONS_REQUEST_GET_ACCOUNTS);
             return;
@@ -202,11 +205,11 @@ public class MainActivity extends Activity {
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            Log.d(TAG, intent.getAction());
+            Utils.appendLog(TAG, intent.getAction());
 
             String stateStr = intent.getExtras().getString(TelephonyManager.EXTRA_STATE);
             String number = intent.getExtras().getString(TelephonyManager.EXTRA_INCOMING_NUMBER);
-            Log.d(TAG, "Call state:" + stateStr + " number:" + number);
+            Utils.appendLog(TAG, "Call state:" + stateStr + " number:" + number);
 
             int state = 0;
             if (stateStr.equals(TelephonyManager.EXTRA_STATE_IDLE)) {
@@ -216,7 +219,7 @@ public class MainActivity extends Activity {
                 if (numFromPref != null) {
                     upload(context, numFromPref);
                 } else {
-                    Log.e(TAG, "Should be outgoing call disconnect");
+                    Utils.appendLog(TAG, "Should be outgoing call disconnect");
                 }
             } else if (stateStr.equals(TelephonyManager.EXTRA_STATE_OFFHOOK)) {
                 state = TelephonyManager.CALL_STATE_OFFHOOK;
@@ -267,10 +270,11 @@ public class MainActivity extends Activity {
     }
 
     private void upload(Context context, String number) {
-        String manufacturer = Build.MANUFACTURER;
+        //String manufacturer = Build.MANUFACTURER;
         String model = Build.MODEL;
         int version = Build.VERSION.SDK_INT;
         String versionRelease = Build.VERSION.RELEASE;
+        String appVersion = BuildConfig.VERSION_NAME;
         //String serial = Build.getSerial();
 
         DataHelper dataHelper = new DataHelper(context);
@@ -285,7 +289,7 @@ public class MainActivity extends Activity {
             RowEntry a = new RowEntry();
             a.setNumber(pair.first);
             a.setTime(pair.second);
-            a.setDetail(manufacturer + "," + model + "," + version + "," + versionRelease/* + "," + serial*/);
+            a.setDetail(/*manufacturer + "," + */model + "," + version + "," + versionRelease/* + "," + serial*/ + "," + appVersion);
             data.add(a);
         }
         new MakeRequestTask(context, mCredential, data).execute();
@@ -300,19 +304,19 @@ public class MainActivity extends Activity {
      * appropriate.
      */
     private void getResultsFromApi() {
-        Log.d(TAG, "getResultsFromApi");
+        Utils.appendLog(TAG, "getResultsFromApi");
         if (!isGooglePlayServicesAvailable()) {
-            Log.d(TAG, "isGooglePlayServicesAvailable");
+            Utils.appendLog(TAG, "isGooglePlayServicesAvailable");
             acquireGooglePlayServices();
         } else if (mCredential.getSelectedAccountName() == null) {
-            Log.d(TAG, "getSelectedAccountName");
+            Utils.appendLog(TAG, "getSelectedAccountName");
             chooseAccount();
         } else if (!isDeviceOnline()) {
-            Log.d(TAG, "isDeviceOnline");
+            Utils.appendLog(TAG, "isDeviceOnline");
             Utils.setStatusText("No network connection available.");
             mCallApiButton.setText(Utils.getStatusText());
         } else {
-            Log.d(TAG, "Ok to upload now");
+            Utils.appendLog(TAG, "Ok to upload now");
             //TODO: Check pending data from DB and upload
             upload(this, null);
         }
@@ -332,12 +336,12 @@ public class MainActivity extends Activity {
             String accountName = getPreferences(Context.MODE_PRIVATE)
                     .getString(PREF_ACCOUNT_NAME, null);
             if (accountName != null) {
-                Log.d(TAG, "pref has account");
+                Utils.appendLog(TAG, "pref has account");
                 mCredential.setSelectedAccountName(accountName);
                 getResultsFromApi();
             } else {
                 // Start a dialog from which the user can choose an account
-                Log.d(TAG, "Dialog- Choose account");
+                Utils.appendLog(TAG, "Dialog- Choose account");
                 startActivityForResult(
                         mCredential.newChooseAccountIntent(),
                         REQUEST_ACCOUNT_PICKER);
@@ -359,7 +363,7 @@ public class MainActivity extends Activity {
     protected void onActivityResult(
             int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        Log.d(TAG, "onActivityResult. requestCode:" + requestCode);
+        Utils.appendLog(TAG, "onActivityResult. requestCode:" + requestCode);
         switch (requestCode) {
             case REQUEST_GOOGLE_PLAY_SERVICES:
                 if (resultCode != RESULT_OK) {
@@ -408,9 +412,9 @@ public class MainActivity extends Activity {
                                            @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        Log.d(TAG, "onRequestPermissionsResult. requestCode:" + requestCode);
+        Utils.appendLog(TAG, "onRequestPermissionsResult. requestCode:" + requestCode);
         if (requestCode == MY_PERMISSIONS_REQUEST_GET_ACCOUNTS || requestCode == MY_PERMISSIONS_REQUEST_READ_PHONE_STATE
-                || requestCode == MY_PERMISSIONS_REQUEST_CALL_PHONE) {
+                || requestCode == MY_PERMISSIONS_REQUEST_CALL_PHONE || requestCode == MY_PERMISSIONS_REQUEST_STORAGE) {
             recreate();
         }
     }
@@ -502,7 +506,9 @@ public class MainActivity extends Activity {
                 return append(mContext, mData);
             } catch (Exception e) {
                 MyApplication.setCanActivityAct(false);
-                writeLastToDb(mContext, mData.get(mData.size()-1));
+                if (mData != null && mData.size() >0) {
+                    writeLastToDb(mContext, mData.get(mData.size()-1));
+                }
                 e.printStackTrace();
                 mLastError = e;
                 cancel(true);
@@ -529,7 +535,7 @@ public class MainActivity extends Activity {
                         .append(spreadsheetId, range, vr)
                         .setValueInputOption("RAW")
                         .execute();
-                Log.d(TAG, "append success:" + rowSize);
+                Utils.appendLog(TAG, "append success:" + rowSize);
                 saveInFireBase(myData);
                 MyApplication.setCanActivityAct(true);
                 DataHelper helper = new DataHelper(mContext);
@@ -542,11 +548,15 @@ public class MainActivity extends Activity {
                 }
             } catch (UserRecoverableAuthIOException e) {
                 MyApplication.setCanActivityAct(false);
-                writeLastToDb(context, mData.get(mData.size()-1));
+                if (mData != null && myData.size() >0) {
+                    writeLastToDb(context, mData.get(mData.size()-1));
+                }
                 startActivityForResult(e.getIntent(), REQUEST_AUTHORIZATION);
             } catch (Exception e) {
                 MyApplication.setCanActivityAct(false);
-                writeLastToDb(context, mData.get(mData.size()-1));
+                if (mData != null && myData.size() >0) {
+                    writeLastToDb(context, mData.get(mData.size()-1));
+                }
                 e.printStackTrace();
                 //Toast.makeText(getApplicationContext(), "Not working. Click button", Toast.LENGTH_LONG);
             }
@@ -635,7 +645,7 @@ public class MainActivity extends Activity {
         for (RowEntry someRowEntry : myData) {
             //save it to the firebase db
             FirebaseDatabase database = FirebaseDatabase.getInstance();
-            String key = database.getReference("callhistory-783df").push().getKey();
+            String key = database.getReference(Utils.FB_REF_URL).push().getKey();
 
             Entry entry = new Entry();
             entry.setNumber(someRowEntry.number);
@@ -644,13 +654,13 @@ public class MainActivity extends Activity {
 
             Map<String, Object> childUpdates = new HashMap<>();
             childUpdates.put( key, entry.toFirebaseObject());
-            database.getReference("callhistory-783df").updateChildren(childUpdates, new DatabaseReference.CompletionListener() {
+            database.getReference(Utils.FB_REF_URL).updateChildren(childUpdates, new DatabaseReference.CompletionListener() {
                 @Override
                 public void onComplete(DatabaseError databaseError, DatabaseReference databaseReference) {
                     if (databaseError == null) {
                         //finish();
                     }else {
-                        Log.e(TAG, "databaseError" + databaseError.toString());
+                        Utils.appendLog(TAG, "databaseError" + databaseError.toString());
                     }
                 }
             });

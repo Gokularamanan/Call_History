@@ -62,7 +62,7 @@ public class DataHelper extends SQLiteOpenHelper {
         contentValues.put(KEY_TIME, Utils.getCurrentTime());
         long result = db.insert(TABLE_NAME,null,contentValues);
         db.close();
-        Log.d(TAG, "Write number: " + number + "-" + result);
+        Utils.appendLog(TAG, "Write number: " + number + "-" + result);
         Utils.setStatusText("XL Connection:Pending,Must click");
     }
 

@@ -9,17 +9,24 @@ import android.preference.PreferenceManager;
 import android.util.Log;
 import android.widget.Toast;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
 public class Utils {
 
+    private static final boolean WRITE_TO_FILE = true;
     public static final String TAG_APP = "CALH.";
     private static final String TAG = TAG_APP + Utils.class.getSimpleName();
 
     private static final String PREF_REJECT_NUMBER = "reject_number";
     private static final String PREF_XL_ID = "xl_id";
+    public static final String FB_REF_URL = "callhistory-e2d3e";
+    public static final String FB_REF_URL_PROD = "callhistory-783df";
 
     public static final int DEVICE_ROLE_UNKNOWN = 101;
     public static final int DEVICE_ROLE_RECEIVE = 102;
@@ -63,7 +70,7 @@ public class Utils {
 
         } catch (Exception e) {
             e.printStackTrace();
-            Log.d("unable", "msg cant dissconect call....");
+            Utils.appendLog("unable", "msg cant dissconect call....");
             Toast.makeText(context, "Cannot disconnect call", Toast.LENGTH_LONG);
 
         }
@@ -71,8 +78,6 @@ public class Utils {
 
     public static String getPrefRejectNumber(Context ctx) {
         return MyApplication.rejectNumber;
-        /*final SharedPreferences pref = PreferenceManager.getDefaultSharedPreferences(ctx);
-        return pref.getString(PREF_REJECT_NUMBER, null);*/
     }
 
     public static String getStatusText() {
@@ -90,14 +95,6 @@ public class Utils {
 
     public static void setPrefRejectNumber(Context ctx, String number) {
         MyApplication.rejectNumber = number;
-        /*final SharedPreferences pref = android.preference.PreferenceManager.getDefaultSharedPreferences(ctx);
-        final SharedPreferences.Editor edit = pref.edit();
-        if (number == null) {
-            edit.remove(PREF_REJECT_NUMBER);
-        } else {
-            edit.putString(PREF_REJECT_NUMBER, number);
-        }
-        edit.commit();*/
     }
 
     public static void setPrefXlId(Context ctx, String xlsID) {
@@ -127,8 +124,45 @@ public class Utils {
         try {
             context.startActivity(i);
         } catch (Exception e) {
-            Log.e(TAG, "Not able to start activity" + e.toString());
+            Utils.appendLog(TAG, "Not able to start activity" + e.toString());
 
+        }
+    }
+
+    public static void appendLog(String file, String text)
+    {
+        Log.d(file, text);
+        if (WRITE_TO_FILE) {
+            File logFile = new File("sdcard/log.file");
+            if (!logFile.exists())
+            {
+                try
+                {
+                    logFile.createNewFile();
+                }
+                catch (IOException e)
+                {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
+                }
+            }
+            try
+            {
+                //BufferedWriter for performance, true to set append to file flag
+                BufferedWriter buf = new BufferedWriter(new FileWriter(logFile, true));
+                long yourmilliseconds = System.currentTimeMillis();
+                SimpleDateFormat sdf = new SimpleDateFormat("MMM dd,yyyy HH:mm");
+
+                Date resultdate = new Date(yourmilliseconds);
+                buf.append(sdf.format(resultdate) + ":" + file + ":" + text);
+                buf.newLine();
+                buf.close();
+            }
+            catch (IOException e)
+            {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
         }
     }
 }
