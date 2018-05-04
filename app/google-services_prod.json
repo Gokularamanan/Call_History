@@ -1,27 +1,27 @@
 {
   "project_info": {
-    "project_number": "899254243917",
-    "firebase_url": "https://callhistory-e2d3e.firebaseio.com",
-    "project_id": "callhistory-e2d3e",
-    "storage_bucket": "callhistory-e2d3e.appspot.com"
+    "project_number": "426378728104",
+    "firebase_url": "https://callhistory-783df.firebaseio.com",
+    "project_id": "callhistory-783df",
+    "storage_bucket": "callhistory-783df.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:899254243917:android:a97f173acf48a680",
+        "mobilesdk_app_id": "1:426378728104:android:a97f173acf48a680",
         "android_client_info": {
           "package_name": "com.call.history.callhistory"
         }
       },
       "oauth_client": [
         {
-          "client_id": "899254243917-er9ethl2nro9ffisnj6o3p2dca265kqh.apps.googleusercontent.com",
+          "client_id": "426378728104-dfcesrmegh03o1idvemb3upnrlh5ra9p.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyBQecc1LVX4qWrklEmOIr1QtDxucUVr9MQ"
+          "current_key": "AIzaSyAsc-LR74vHBvteK8stlslhPBONhcg07Bc"
         }
       ],
       "services": {

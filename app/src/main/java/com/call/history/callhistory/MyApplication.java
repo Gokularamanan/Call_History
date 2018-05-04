@@ -7,10 +7,21 @@ import android.util.Log;
 
 public class MyApplication extends Application implements Application.ActivityLifecycleCallbacks {
     private static final String TAG = Utils.TAG_APP + MyApplication.class.getSimpleName();
+    private static MyApplication sInstance;
 
     private static boolean canActivityAct;
     public static String rejectNumber;
     public static String statusText = "XL Connection:Fail,Must click";
+
+    public static MyApplication getInstance() {
+        return sInstance;
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        sInstance = this;
+    }
 
     @Override
     public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
