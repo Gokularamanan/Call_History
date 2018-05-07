@@ -109,7 +109,7 @@ public class Main2Activity extends Activity {
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.menu_read, menu);
-
+        menu.getItem(1).setChecked(Utils.getIsLogToFile());
         // return true so that the menu pop up is opened
         return true;
     }
@@ -119,6 +119,10 @@ public class Main2Activity extends Activity {
         switch (item.getItemId()) {
             case R.id.recreateMenu:
                 recreate();
+                return true;
+            case R.id.log_to_file:
+                item.setChecked(!item.isChecked());
+                Utils.setIsLogToFile(item.isChecked());
                 return true;
             default:
                 return super.onOptionsItemSelected(item);

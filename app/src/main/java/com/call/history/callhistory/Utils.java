@@ -164,11 +164,7 @@ public class Utils {
             {
                 //BufferedWriter for performance, true to set append to file flag
                 BufferedWriter buf = new BufferedWriter(new FileWriter(logFile, true));
-                long yourmilliseconds = System.currentTimeMillis();
-                SimpleDateFormat sdf = new SimpleDateFormat("MMM dd,yyyy HH:mm");
-
-                Date resultdate = new Date(yourmilliseconds);
-                buf.append(sdf.format(resultdate) + ":" + file + ":" + text);
+                buf.append(Utils.getCurrentTime() + ":" + file + ":" + text);
                 buf.newLine();
                 buf.close();
             }

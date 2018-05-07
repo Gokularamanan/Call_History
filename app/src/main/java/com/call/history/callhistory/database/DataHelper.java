@@ -68,7 +68,8 @@ public class DataHelper extends SQLiteOpenHelper {
 
     public void deleteDBEntry() {
         SQLiteDatabase db = this.getReadableDatabase();
-        db.delete(TABLE_NAME, null, null);
+        int count = db.delete(TABLE_NAME, null, null);
+        Utils.appendLog(TAG, "Delete count:" + count);
     }
 
     public int getCount() {

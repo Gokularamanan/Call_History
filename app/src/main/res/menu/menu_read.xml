@@ -3,5 +3,10 @@
     <item
         android:id="@+id/recreateMenu"
         android:title="Refresh" />
+    <item android:id="@+id/log_to_file"
+        android:titleCondensed="Persist"
+        android:title="Allow log"
+        android:icon="@android:drawable/ic_menu_preferences"
+        android:checkable="true" />
 
 </menu>

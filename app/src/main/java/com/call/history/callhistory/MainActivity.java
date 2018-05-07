@@ -48,7 +48,6 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -214,9 +213,7 @@ public class MainActivity extends Activity {
             String number = intent.getExtras().getString(TelephonyManager.EXTRA_INCOMING_NUMBER);
             Utils.appendLog(TAG, "Call state:" + stateStr + " number:" + number);
 
-            int state = 0;
             if (stateStr.equals(TelephonyManager.EXTRA_STATE_IDLE)) {
-                state = TelephonyManager.CALL_STATE_IDLE;
                 String numFromPref = Utils.getPrefRejectNumber(context);
                 Utils.setPrefRejectNumber(context, null);
                 if (numFromPref != null) {
@@ -225,9 +222,7 @@ public class MainActivity extends Activity {
                     Utils.appendLog(TAG, "Should be outgoing call disconnect");
                 }
             } else if (stateStr.equals(TelephonyManager.EXTRA_STATE_OFFHOOK)) {
-                state = TelephonyManager.CALL_STATE_OFFHOOK;
             } else if (stateStr.equals(TelephonyManager.EXTRA_STATE_RINGING)) {
-                state = TelephonyManager.CALL_STATE_RINGING;
                 Utils.setPrefRejectNumber(context, number);
                 Utils.disconnectCall(context);
             }
@@ -478,7 +473,7 @@ public class MainActivity extends Activity {
      * An asynchronous task that handles the Google Sheets API call.
      * Placing the API calls in their own task ensures the UI stays responsive.
      */
-    public class MakeRequestTask extends AsyncTask<Void, Void, List<String>> {
+    public class MakeRequestTask extends AsyncTask<Void, Void, Boolean> {
         private com.google.api.services.sheets.v4.Sheets mService = null;
         private Exception mLastError = null;
         List<RowEntry> mData = null;
@@ -503,24 +498,29 @@ public class MainActivity extends Activity {
          * @param params no parameters needed for this task.
          */
         @Override
-        protected List<String> doInBackground(Void... params) {
+        protected Boolean doInBackground(Void... params) {
             try {
                 //Read from DB if any
                 return append(mContext, mData);
             } catch (Exception e) {
-                MyApplication.setCanActivityAct(false);
+                Utils.appendLog(TAG, "e3:" + e.toString());
                 if (mData != null && mData.size() >0) {
+                    MyApplication.setCanActivityAct(false);
                     writeLastToDb(mContext, mData.get(mData.size()-1));
                 }
                 e.printStackTrace();
                 mLastError = e;
                 cancel(true);
                 return null;
+            } finally {
+                mData = null;
             }
         }
 
-        public List<String> append(Context context, List<RowEntry> myData) {
 
+        public boolean append(Context context, List<RowEntry> myData) {
+
+            Boolean taskStaus = false;
             try {
                 int rowSize = myData.size();
                 List<List<Object>> writeData = new ArrayList<>();
@@ -545,25 +545,25 @@ public class MainActivity extends Activity {
                 if (helper.getPendingNumber().size() > 0) {
                     helper.deleteDBEntry();
                 }
-                if (isVisible) {
-                    Utils.setStatusText("XL Connection:Success");
-                    mCallApiButton.setText(Utils.getStatusText());
-                }
+                taskStaus = true;
             } catch (UserRecoverableAuthIOException e) {
-                MyApplication.setCanActivityAct(false);
+                Utils.appendLog(TAG, "e1:" + e.toString());
                 if (mData != null && myData.size() >0) {
+                    MyApplication.setCanActivityAct(false);
                     writeLastToDb(context, mData.get(mData.size()-1));
                 }
                 startActivityForResult(e.getIntent(), REQUEST_AUTHORIZATION);
             } catch (Exception e) {
-                MyApplication.setCanActivityAct(false);
+                Utils.appendLog(TAG, "e2:" + e.toString());
                 if (mData != null && myData.size() >0) {
+                    MyApplication.setCanActivityAct(false);
                     writeLastToDb(context, mData.get(mData.size()-1));
                 }
                 e.printStackTrace();
-                //Toast.makeText(getApplicationContext(), "Not working. Click button", Toast.LENGTH_LONG);
+            } finally {
+                mData = null;
             }
-            return null;
+            return taskStaus;
         }
 
         @Override
@@ -572,7 +572,14 @@ public class MainActivity extends Activity {
         }
 
         @Override
-        protected void onPostExecute(List<String> output) {
+        protected void onPostExecute(Boolean output) {
+            Utils.appendLog(TAG, "Asyctask update UI:output-" + output + ",isVisible:" + isVisible);
+            if (output) {
+                if (isVisible) {
+                    Utils.setStatusText("XL Connection:Success");
+                    mCallApiButton.setText(Utils.getStatusText());
+                }
+            }
         }
 
         @Override
@@ -596,56 +603,11 @@ public class MainActivity extends Activity {
                 mCallApiButton.setText(Utils.getStatusText());
             }
         }
-
-
-        /**
-         * Fetch a list of names and majors of students in a sample spreadsheet:
-         * https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
-         *
-         * @return List of names and majors
-         * @throws IOException
-         */
-        private List<String> read() throws IOException {
-            List<String> results = new ArrayList<String>();
-            ValueRange response = this.mService.spreadsheets().values()
-                    .get(spreadsheetId, range)
-                    .execute();
-            List<List<Object>> values = response.getValues();
-            if (values != null) {
-                results.add("Name, Major");
-                for (List row : values) {
-                    results.add(row.get(0) + ", " + row.get(4));
-                }
-            }
-            return results;
-        }
-
-        public List<String> update(List<RowEntry> myData) {
-
-            try {
-                List<List<Object>> writeData = new ArrayList<>();
-                for (RowEntry someRowEntry : myData) {
-                    List<Object> dataRow = new ArrayList<>();
-                    dataRow.add(someRowEntry.number);
-                    writeData.add(dataRow);
-                }
-
-                ValueRange vr = new ValueRange().setValues(writeData).setMajorDimension("ROWS");
-                this.mService.spreadsheets().values()
-                        .update(spreadsheetId, range, vr)
-                        .setValueInputOption("RAW")
-                        .execute();
-            } catch (UserRecoverableAuthIOException e) {
-                startActivityForResult(e.getIntent(), REQUEST_AUTHORIZATION);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            return null;
-        }
     }
 
     private void saveInFireBase(List<RowEntry> myData) {
         for (RowEntry someRowEntry : myData) {
+            Utils.appendLog(TAG, "saveInFireBase number:" + someRowEntry.number);
             //save it to the firebase db
             FirebaseDatabase database = FirebaseDatabase.getInstance();
             String key = database.getReference(Utils.FB_REF_URL).push().getKey();
@@ -679,6 +641,7 @@ public class MainActivity extends Activity {
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.main, menu);
+        menu.getItem(0).setChecked(Utils.getIsLogToFile());
 
         // return true so that the menu pop up is opened
         return true;
